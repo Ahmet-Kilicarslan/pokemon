@@ -2,7 +2,10 @@
 #include <stdlib.h>
 #include <time.h>
 #include "functions.h"
-
+/*
+ *   gcc -Wall -Werror -Wextra *.c -o project
+ *   ./project
+ */
 
 int main(void) {
 
