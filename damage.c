@@ -2,17 +2,96 @@
 #include <string.h>
 #include "functions.h"
 
-void applyDamage(Player *player1, Player *player2, int p1Choice, int p1MoveIndex, int p2Choice, int p2MoveIndex) {
+#define STAB_BONUS 1.5f
+#define NO_STAB 1.0f
+
+float getTypeEffectMultiplier(Type moveType, Type defenderType) {
+    for (int i = 0; i < NUM_TYPES; i++) {
+        if (strcmp(moveType.effects[i].defName, defenderType.name) == 0) {
+            return moveType.effects[i].multiplier;
+        }
+    }
+    return 1.0f;
+}
+
+static float getSTABMultiplier(Move *move, Pokemon *attacker) {
+    if (strcmp(move->type.name, attacker->types[0].name) == 0 ||
+        strcmp(move->type.name, attacker->types[1].name) == 0) {
+        return STAB_BONUS;
+    }
+    return NO_STAB;
+}
+
+static float getCombinedTypeEffect(Move *move, Pokemon *defender) {
+    float typeEffect1 = getTypeEffectMultiplier(move->type, defender->types[0]);
+
+    float typeEffect2;
+    if (strcmp(defender->types[1].name, "None") == 0) {
+        typeEffect2 = 1.0f;
+    } else {
+        typeEffect2 = getTypeEffectMultiplier(move->type, defender->types[1]);
+    }
+
+    return typeEffect1 * typeEffect2;
+}
+
+float calculateSingleDamage(Pokemon *attacker, Pokemon *defender, Move *move) {
+    float attack, defense;
+
+    if (move->category == PHYSICAL) {
+        attack = attacker->attack;
+        defense = defender->defense;
+    } else {
+        attack = attacker->spAtk;
+        defense = defender->spDef;
+    }
+
+    float typeEffect = getCombinedTypeEffect(move, defender);
+    float stab = getSTABMultiplier(move, attacker);
+
+    return move->power * (attack / defense) * typeEffect * stab;
+}
+
+static int executeAttack(Player *attackerPlayer, Player *defenderPlayer, int moveIndex) {
+    Pokemon *attacker = &attackerPlayer->pokemons[attackerPlayer->currentIndex];
+    Pokemon *defender = &defenderPlayer->pokemons[defenderPlayer->currentIndex];
+    Move *move = &attacker->moves[moveIndex];
+
+    float damage = calculateSingleDamage(attacker, defender, move);
+    defender->currentHP -= damage;
+
+    printf("%s's %s used %s! (Damage: %.1f)\n",
+           attackerPlayer->name, attacker->name, move->name, damage);
+
+    if (defender->currentHP <= 0) {
+        defender->currentHP = 0;
+        return 1;
+    }
+    return 0;
+}
+
+static int determineFirstPlayer(Player *player1, Player *player2,
+                                int p1Choice, int p2Choice) {
     Pokemon *p1 = &player1->pokemons[player1->currentIndex];
     Pokemon *p2 = &player2->pokemons[player2->currentIndex];
 
-    // Determine who attacks first (faster Pokemon or if someone switched)
     int p1First = p1->speed >= p2->speed;
 
-    // If either player switched, they go last
     if (p1Choice == 2) p1First = 0;
     if (p2Choice == 2) p1First = 1;
-    if (p1Choice == 2 && p2Choice == 2) return; // Both switched, no damage
+
+    return p1First;
+}
+
+void applyDamage(Player *player1, Player *player2,
+                 int p1Choice, int p1MoveIndex,
+                 int p2Choice, int p2MoveIndex) {
+
+    if (p1Choice == 2 && p2Choice == 2) {
+        return;
+    }
+
+    int p1First = determineFirstPlayer(player1, player2, p1Choice, p2Choice);
 
     Player *first = p1First ? player1 : player2;
     Player *second = p1First ? player2 : player1;
@@ -21,65 +100,12 @@ void applyDamage(Player *player1, Player *player2, int p1Choice, int p1MoveIndex
     int firstMoveIndex = p1First ? p1MoveIndex : p2MoveIndex;
     int secondMoveIndex = p1First ? p2MoveIndex : p1MoveIndex;
 
-    // First attacker
+    int defenderFainted = 0;
     if (firstChoice == 1) {
-        Pokemon *attacker = &first->pokemons[first->currentIndex];
-        Pokemon *defender = &second->pokemons[second->currentIndex];
-        Move *move = &attacker->moves[firstMoveIndex];
-
-        float attack = (move->category == PHYSICAL) ? attacker->attack : attacker->spAtk;
-        float defense = (move->category == PHYSICAL) ? defender->defense : defender->spDef;
-
-        float typeEffect1 = getTypeEffectMultiplier(move->type, defender->types[0]);
-        float typeEffect2 = (strcmp(defender->types[1].name, "None") == 0) ? 1.0 :
-                            getTypeEffectMultiplier(move->type, defender->types[1]);
-
-        float stab = (strcmp(move->type.name, attacker->types[0].name) == 0 ||
-                      strcmp(move->type.name, attacker->types[1].name) == 0) ? 1.5 : 1.0;
-
-        float damage = move->power * (attack / defense) * typeEffect1 * typeEffect2 * stab;
-
-        defender->currentHP -= damage;
-        printf("%s's %s used %s! (Damage: %.1f)\n", first->name, attacker->name, move->name, damage);
-
-        if (defender->currentHP <= 0) {
-            defender->currentHP = 0;
-            return; // Defender fainted, can't attack back
-        }
+        defenderFainted = executeAttack(first, second, firstMoveIndex);
     }
 
-    // Second attacker
-    if (secondChoice == 1) {
-        Pokemon *attacker = &second->pokemons[second->currentIndex];
-        Pokemon *defender = &first->pokemons[first->currentIndex];
-        Move *move = &attacker->moves[secondMoveIndex];
-
-        float attack = (move->category == PHYSICAL) ? attacker->attack : attacker->spAtk;
-        float defense = (move->category == PHYSICAL) ? defender->defense : defender->spDef;
-
-        float typeEffect1 = getTypeEffectMultiplier(move->type, defender->types[0]);
-        float typeEffect2 = (strcmp(defender->types[1].name, "None") == 0) ? 1.0 :
-                            getTypeEffectMultiplier(move->type, defender->types[1]);
-
-        float stab = (strcmp(move->type.name, attacker->types[0].name) == 0 ||
-                      strcmp(move->type.name, attacker->types[1].name) == 0) ? 1.5 : 1.0;
-
-        float damage = move->power * (attack / defense) * typeEffect1 * typeEffect2 * stab;
-
-        defender->currentHP -= damage;
-        printf("%s's %s used %s! (Damage: %.1f)\n", second->name, attacker->name, move->name, damage);
-
-        if (defender->currentHP <= 0) {
-            defender->currentHP = 0;
-        }
+    if (secondChoice == 1 && !defenderFainted) {
+        executeAttack(second, first, secondMoveIndex);
     }
-}
-
-float getTypeEffectMultiplier(Type moveType, Type defenderType1) {
-    for (int i = 0; i < 18; i++) {
-        if (strcmp(moveType.effects[i].defName, defenderType1.name) == 0) {
-            return moveType.effects[i].multiplier;
-        }
-    }
-    return 1.0;
 }

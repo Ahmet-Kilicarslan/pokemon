@@ -3,13 +3,60 @@
 #include <string.h>
 #include "functions.h"
 
+Type* findTypeByName(Type types[], const char *name) {
+    for (int i = 0; i < NUM_TYPES; i++) {
+        if (strcmp(types[i].name, name) == 0) {
+            return &types[i];
+        }
+    }
+    return NULL;
+}
 
-void initialize(
-    Type types[],
-    Move moves[],
-    Pokemon pokemons[],
-    Player *player1,
-    Player *player2) {
+static void initializeNoneType(Type *type) {
+    strcpy(type->name, "None");
+    for (int i = 0; i < NUM_TYPES; i++) {
+        type->effects[i].multiplier = 1.0f;
+    }
+}
+
+void assignRandomPokemon(Player *player, Pokemon pokemons[], int used[]) {
+    for (int i = 0; i < POKEMON_PER_PLAYER; i++) {
+        int index;
+        do {
+            index = rand() % NUM_POKEMON;
+        } while (used[index]);
+
+        used[index] = 1;
+        player->pokemons[i] = pokemons[index];
+    }
+    player->currentIndex = 0;
+}
+
+void assignRandomMoves(Pokemon *pokemon, Move moves[]) {
+    int usedMoves[NUM_MOVES] = {0};
+
+    for (int i = 0; i < MOVES_PER_POKEMON; i++) {
+        int moveIndex;
+        do {
+            moveIndex = rand() % NUM_MOVES;
+        } while (usedMoves[moveIndex]);
+
+        usedMoves[moveIndex] = 1;
+        pokemon->moves[i] = moves[moveIndex];
+    }
+}
+
+static FILE* openFileOrExit(const char *filename, const char *mode) {
+    FILE *file = fopen(filename, mode);
+    if (file == NULL) {
+        printf("Error: Could not open %s\n", filename);
+        exit(1);
+    }
+    return file;
+}
+
+void initialize(Type types[], Move moves[], Pokemon pokemons[],
+                Player *player1, Player *player2) {
     initializeTypes(types);
     initializeMoves(moves, types);
     initializePokemons(pokemons, moves, types);
@@ -17,53 +64,25 @@ void initialize(
     strcpy(player1->name, "Player 1");
     strcpy(player2->name, "Player 2");
 
-    // Randomly assign 6 unique Pokemon to each player
-    int used[1015] = {0}; // Track which Pokemon are used
-
-    // Player 1
-    for (int i = 0; i < 6; i++) {
-        int index;
-        do {
-            index = rand() % 1015;
-        } while (used[index]);
-
-        used[index] = 1;
-        player1->pokemons[i] = pokemons[index];
-    }
-    player1->currentIndex = 0; // Start with first Pokemon
-
-    // Player 2
-    for (int i = 0; i < 6; i++) {
-        int index;
-        do {
-            index = rand() % 1015;
-        } while (used[index]);
-
-        used[index] = 1;
-        player2->pokemons[i] = pokemons[index];
-    }
-    player2->currentIndex = 0;
+    int used[NUM_POKEMON] = {0};
+    assignRandomPokemon(player1, pokemons, used);
+    assignRandomPokemon(player2, pokemons, used);
 }
 
 void initializeTypes(Type types[]) {
-    FILE *file = fopen("types.txt", "r");
-
-    if (file == NULL) {
-        printf("Error opening file types.txt\n");
-        exit(1);
-    }
+    FILE *file = openFileOrExit("types.txt", "r");
 
     int typeIndex = 0;
     char line[100];
-    while (fgets(line, sizeof(line), file) && typeIndex < 18) {
-        //Remove new line
-        line[strcspn(line, "\n")] = 0;
+
+    while (fgets(line, sizeof(line), file) && typeIndex < NUM_TYPES) {
+        line[strcspn(line, "\n")] = '\0';
 
         if (strchr(line, ' ') == NULL) {
             strcpy(types[typeIndex].name, line);
 
-            for (int i = 0; i < 18; i++) {
-                char defName[20];
+            for (int i = 0; i < NUM_TYPES; i++) {
+                char defName[MAX_NAME_LENGTH];
                 float multiplier;
                 fscanf(file, "%s %f\n", defName, &multiplier);
 
@@ -78,46 +97,31 @@ void initializeTypes(Type types[]) {
 }
 
 void initializeMoves(Move moves[], Type types[]) {
-    FILE *file = fopen("moves.txt", "r");
+    FILE *file = openFileOrExit("moves.txt", "r");
 
-    if (file == NULL) {
-        printf("Error opening file moves.txt\n");
-        exit(1);
-    }
-
-    for (int i = 0; i < 486; i++) {
-        char name[50], typeName[20], category[20];
+    for (int i = 0; i < NUM_MOVES; i++) {
+        char name[50], typeName[MAX_NAME_LENGTH], category[MAX_NAME_LENGTH];
         float power;
         fscanf(file, "%s %s %s %f\n", name, typeName, category, &power);
 
         strcpy(moves[i].name, name);
         moves[i].power = power;
 
-        for (int j = 0; j < 18; j++) {
-            if (strcmp(types[j].name, typeName) == 0) {
-                moves[i].type = types[j];
-                break;
-            }
+        Type *foundType = findTypeByName(types, typeName);
+        if (foundType != NULL) {
+            moves[i].type = *foundType;
         }
 
-        if (strcmp(category, "Physical") == 0) {
-            moves[i].category = PHYSICAL;
-        } else {
-            moves[i].category = SPECIAL;
-        }
+        moves[i].category = (strcmp(category, "Physical") == 0) ? PHYSICAL : SPECIAL;
     }
     fclose(file);
 }
 
 void initializePokemons(Pokemon pokemons[], Move moves[], Type types[]) {
-    FILE *file = fopen("pokemon.txt", "r");
-    if (file == NULL) {
-        printf("Error: Could not open pokemon.txt\n");
-        exit(1);
-    }
+    FILE *file = openFileOrExit("pokemon.txt", "r");
 
-    for (int i = 0; i < 1015; i++) {
-        char name[50], type1[20], type2[20];
+    for (int i = 0; i < NUM_POKEMON; i++) {
+        char name[50], type1[MAX_NAME_LENGTH], type2[MAX_NAME_LENGTH];
         float maxHP, attack, defense, spAtk, spDef, speed;
 
         fscanf(file, "%s %s %s %f %f %f %f %f %f\n",
@@ -132,42 +136,21 @@ void initializePokemons(Pokemon pokemons[], Move moves[], Type types[]) {
         pokemons[i].spDef = spDef;
         pokemons[i].speed = speed;
 
-        // Find type1
-        for (int j = 0; j < 18; j++) {
-            if (strcmp(types[j].name, type1) == 0) {
-                pokemons[i].types[0] = types[j];
-                break;
-            }
+        Type *foundType1 = findTypeByName(types, type1);
+        if (foundType1 != NULL) {
+            pokemons[i].types[0] = *foundType1;
         }
 
-        // Find type2 (or set to "None")
         if (strcmp(type2, "-") == 0) {
-            strcpy(pokemons[i].types[1].name, "None");
-            // Set all None effects to 1.0
-            for (int j = 0; j < 18; j++) {
-                pokemons[i].types[1].effects[j].multiplier = 1.0;
-            }
+            initializeNoneType(&pokemons[i].types[1]);
         } else {
-            for (int j = 0; j < 18; j++) {
-                if (strcmp(types[j].name, type2) == 0) {
-                    pokemons[i].types[1] = types[j];
-                    break;
-                }
+            Type *foundType2 = findTypeByName(types, type2);
+            if (foundType2 != NULL) {
+                pokemons[i].types[1] = *foundType2;
             }
         }
 
-        // Randomly assign 4 unique moves
-        int usedMoves[486] = {0};
-        for (int j = 0; j < 4; j++) {
-            int moveIndex;
-            do {
-                moveIndex = rand() % 486;
-            } while (usedMoves[moveIndex]);
-
-            usedMoves[moveIndex] = 1;
-            pokemons[i].moves[j] = moves[moveIndex];
-        }
+        assignRandomMoves(&pokemons[i], moves);
     }
-
     fclose(file);
 }

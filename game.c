@@ -1,20 +1,95 @@
 #include <stdio.h>
 #include "functions.h"
 
+static void displayTeams(Player *player1, Player *player2) {
+    printf("%s's team:\n", player1->name);
+    for (int i = 0; i < POKEMON_PER_PLAYER; i++) {
+        printf("%d. %s (HP: %.0f)\n", i + 1,
+               player1->pokemons[i].name,
+               player1->pokemons[i].maxHP);
+    }
+
+    printf("\n%s's team:\n", player2->name);
+    for (int i = 0; i < POKEMON_PER_PLAYER; i++) {
+        printf("%d. %s (HP: %.0f)\n", i + 1,
+               player2->pokemons[i].name,
+               player2->pokemons[i].maxHP);
+    }
+}
+
+void displayBattleStatus(Player *player1, Player *player2) {
+    Pokemon *p1Active = &player1->pokemons[player1->currentIndex];
+    Pokemon *p2Active = &player2->pokemons[player2->currentIndex];
+
+    printf("--- NEW ROUND ---\n");
+    printf("%s's %s (HP: %.0f)\n", player1->name, p1Active->name, p1Active->currentHP);
+    printf("%s's %s (HP: %.0f)\n\n", player2->name, p2Active->name, p2Active->currentHP);
+}
+
+int getPlayerAction(Player *player) {
+    printf("%s, choose your action:\n", player->name);
+    printf("1 - Attack\n");
+    printf("2 - Change Pokemon\n");
+
+    int choice;
+    scanf("%d", &choice);
+    return choice;
+}
+
+int getMoveChoice(Player *player) {
+    Pokemon *current = &player->pokemons[player->currentIndex];
+
+    printf("Select move:\n");
+    for (int i = 0; i < MOVES_PER_POKEMON; i++) {
+        printf("%d - %s\n", i + 1, current->moves[i].name);
+    }
+
+    int choice;
+    scanf("%d", &choice);
+    return choice - 1;
+}
+
+int getSwitchChoice(Player *player) {
+    printf("Select Pokemon:\n");
+
+    for (int i = 0; i < POKEMON_PER_PLAYER; i++) {
+        if (player->pokemons[i].currentHP > 0) {
+            printf("%d - %s (HP: %.0f)\n", i + 1,
+                   player->pokemons[i].name,
+                   player->pokemons[i].currentHP);
+        }
+    }
+
+    int choice;
+    scanf("%d", &choice);
+    return choice - 1;
+}
+
+static void getPlayerTurn(Player *player, int *choice, int *moveIndex) {
+    *choice = getPlayerAction(player);
+    *moveIndex = -1;
+
+    if (*choice == 1) {
+        *moveIndex = getMoveChoice(player);
+    } else {
+        player->currentIndex = getSwitchChoice(player);
+    }
+}
+
+static void handleFaintedPokemon(Player *player) {
+    Pokemon *current = &player->pokemons[player->currentIndex];
+
+    if (current->currentHP <= 0) {
+        printf("%s's %s fainted!\n", player->name, current->name);
+        updateCurrentIndex(player);
+    }
+}
+
 void game(Player *player1, Player *player2) {
     printf("=== POKEMON BATTLE ===\n");
     printf("%s vs %s\n\n", player1->name, player2->name);
 
-    printf("%s's team:\n", player1->name);
-    for (int i = 0; i < 6; i++) {
-        printf("%d. %s (HP: %.0f)\n", i+1, player1->pokemons[i].name, player1->pokemons[i].maxHP);
-    }
-
-    printf("\n%s's team:\n", player2->name);
-    for (int i = 0; i < 6; i++) {
-        printf("%d. %s (HP: %.0f)\n", i+1, player2->pokemons[i].name, player2->pokemons[i].maxHP);
-    }
-
+    displayTeams(player1, player2);
     printf("\nBattle Start!\n\n");
 
     while (isAlive(player1) && isAlive(player2)) {
@@ -29,85 +104,25 @@ void game(Player *player1, Player *player2) {
 }
 
 void gameRound(Player *player1, Player *player2) {
-    printf("--- NEW ROUND ---\n");
-    printf("%s's %s (HP: %.0f)\n", player1->name,
-           player1->pokemons[player1->currentIndex].name,
-           player1->pokemons[player1->currentIndex].currentHP);
-    printf("%s's %s (HP: %.0f)\n\n", player2->name,
-           player2->pokemons[player2->currentIndex].name,
-           player2->pokemons[player2->currentIndex].currentHP);
+    displayBattleStatus(player1, player2);
 
-    // Player 1 choice
-    printf("%s, choose your action:\n", player1->name);
-    printf("1 - Attack\n2 - Change Pokemon\n");
-    int p1Choice;
-    scanf("%d", &p1Choice);
+    int p1Choice, p1MoveIndex;
+    getPlayerTurn(player1, &p1Choice, &p1MoveIndex);
 
-    int p1MoveIndex = -1;
-    if (p1Choice == 1) {
-        Pokemon *current = &player1->pokemons[player1->currentIndex];
-        printf("Select move:\n");
-        for (int i = 0; i < 4; i++) {
-            printf("%d - %s\n", i+1, current->moves[i].name);
-        }
-        scanf("%d", &p1MoveIndex);
-        p1MoveIndex--;
-    } else {
-        printf("Select Pokemon:\n");
-        for (int i = 0; i < 6; i++) {
-            if (player1->pokemons[i].currentHP > 0) {
-                printf("%d - %s (HP: %.0f)\n", i+1, player1->pokemons[i].name, player1->pokemons[i].currentHP);
-            }
-        }
-        int choice;
-        scanf("%d", &choice);
-        player1->currentIndex = choice - 1;
-    }
-
-    // Player 2 choice
-    printf("\n%s, choose your action:\n", player2->name);
-    printf("1 - Attack\n2 - Change Pokemon\n");
-    int p2Choice;
-    scanf("%d", &p2Choice);
-
-    int p2MoveIndex = -1;
-    if (p2Choice == 1) {
-        Pokemon *current = &player2->pokemons[player2->currentIndex];
-        printf("Select move:\n");
-        for (int i = 0; i < 4; i++) {
-            printf("%d - %s\n", i+1, current->moves[i].name);
-        }
-        scanf("%d", &p2MoveIndex);
-        p2MoveIndex--;
-    } else {
-        printf("Select Pokemon:\n");
-        for (int i = 0; i < 6; i++) {
-            if (player2->pokemons[i].currentHP > 0) {
-                printf("%d - %s (HP: %.0f)\n", i+1, player2->pokemons[i].name, player2->pokemons[i].currentHP);
-            }
-        }
-        int choice;
-        scanf("%d", &choice);
-        player2->currentIndex = choice - 1;
-    }
+    printf("\n");
+    int p2Choice, p2MoveIndex;
+    getPlayerTurn(player2, &p2Choice, &p2MoveIndex);
 
     applyDamage(player1, player2, p1Choice, p1MoveIndex, p2Choice, p2MoveIndex);
 
-    // Check if Pokemon fainted and update index
-    if (player1->pokemons[player1->currentIndex].currentHP <= 0) {
-        printf("%s's %s fainted!\n", player1->name, player1->pokemons[player1->currentIndex].name);
-        updateCurrentIndex(player1);
-    }
-    if (player2->pokemons[player2->currentIndex].currentHP <= 0) {
-        printf("%s's %s fainted!\n", player2->name, player2->pokemons[player2->currentIndex].name);
-        updateCurrentIndex(player2);
-    }
+    handleFaintedPokemon(player1);
+    handleFaintedPokemon(player2);
 
     printf("\n");
 }
 
 int isAlive(Player *player) {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < POKEMON_PER_PLAYER; i++) {
         if (player->pokemons[i].currentHP > 0) {
             return 1;
         }
@@ -116,7 +131,7 @@ int isAlive(Player *player) {
 }
 
 void updateCurrentIndex(Player *player) {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < POKEMON_PER_PLAYER; i++) {
         if (player->pokemons[i].currentHP > 0) {
             player->currentIndex = i;
             printf("%s sends out %s!\n", player->name, player->pokemons[i].name);
