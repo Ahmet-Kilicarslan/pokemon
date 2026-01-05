@@ -106,12 +106,34 @@ void game(Player *player1, Player *player2) {
 void gameRound(Player *player1, Player *player2) {
     displayBattleStatus(player1, player2);
 
-    int p1Choice, p1MoveIndex;
-    getPlayerTurn(player1, &p1Choice, &p1MoveIndex);
+    // Step 1: Ask P1 for Action (Attack or Switch)
+    int p1Choice = getPlayerAction(player1);
 
+    // Step 2: Ask P2 for Action (Attack or Switch)
     printf("\n");
-    int p2Choice, p2MoveIndex;
-    getPlayerTurn(player2, &p2Choice, &p2MoveIndex);
+    int p2Choice = getPlayerAction(player2);
+
+    int p1MoveIndex = -1;
+    int p2MoveIndex = -1;
+
+    // Step 3: Ask P1 for Specifics (Which Move or Which Pokemon)
+    printf("\n%s's turn details:\n", player1->name);
+    if (p1Choice == 1) {
+        p1MoveIndex = getMoveChoice(player1);
+    } else {
+        int newIndex = getSwitchChoice(player1);
+        player1->currentIndex = newIndex;
+    }
+
+    // Step 4: Ask P2 for Specifics (Which Move or Which Pokemon)
+    printf("\n%s's turn details:\n", player2->name);
+    if (p2Choice == 1) {
+        p2MoveIndex = getMoveChoice(player2);
+    } else {
+        int newIndex = getSwitchChoice(player2);
+        player2->currentIndex = newIndex;
+    }
+
 
     applyDamage(player1, player2, p1Choice, p1MoveIndex, p2Choice, p2MoveIndex);
 

@@ -3,8 +3,8 @@
 #include <time.h>
 #include "functions.h"
 /*
- *   gcc -Wall -Werror -Wextra *.c -o project
- *   ./project
+    gcc -Wall -Werror -Wextra *.c -o project
+    ./project
  */
 
 int main(void) {
