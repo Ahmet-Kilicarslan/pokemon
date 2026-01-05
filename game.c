@@ -65,16 +65,7 @@ int getSwitchChoice(Player *player) {
     return choice - 1;
 }
 
-static void getPlayerTurn(Player *player, int *choice, int *moveIndex) {
-    *choice = getPlayerAction(player);
-    *moveIndex = -1;
 
-    if (*choice == 1) {
-        *moveIndex = getMoveChoice(player);
-    } else {
-        player->currentIndex = getSwitchChoice(player);
-    }
-}
 
 static void handleFaintedPokemon(Player *player) {
     Pokemon *current = &player->pokemons[player->currentIndex];
